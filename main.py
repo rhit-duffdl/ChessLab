@@ -12,11 +12,18 @@ class ChessLab:
     row_contents = board.fen().split(" ")[0].split("/")
     engine = chess.engine.SimpleEngine.popen_uci("stockfish/stockfish-windows-2022-x86-64-avx2.exe")
 
-    width, height = 752 * 1.25, 1000 * 1.25
+    width, height = 880, 1000
     screen = pygame.display.set_mode((width, height))
     pygame.display.set_caption("Chess Labs")
-    background_color = (129, 84, 56)
+    background_color = (107, 93, 0)
     pygame.mouse.set_visible(False)
+
+    light_square_color = (123, 146, 237)
+    dark_square_color = (33, 50, 110)
+
+    light_square_color = [random.randrange(255) for i in range(3)]
+    dark_square_color = [random.randrange(255) for i in range(3)]
+
 
     square_width = int(width / 8)
     board_bottom = square_width * 8
@@ -86,25 +93,31 @@ class ChessLab:
         # Draw board
         for j in range(8):
             for i in range(8):
-                offset = self.square_width
-                if j % 2 == 0:
-                    offset = 0
+                square_color = self.dark_square_color
                 if i % 2 == 0:
-                    pygame.draw.rect(self.screen, (255, 255, 255),
-                                     pygame.Rect(
-                                         i * self.square_width + offset,
-                                         j * self.square_width,
-                                         self.square_width, self.square_width))
+                    square_color = self.light_square_color
+
+                if j % 2 != 0:
+                    if square_color == self.light_square_color:
+                        square_color = self.dark_square_color
+                    else:
+                        square_color = self.light_square_color
+
+                pygame.draw.rect(self.screen, square_color,
+                                 pygame.Rect(
+                                     i * self.square_width,
+                                     j * self.square_width,
+                                     self.square_width, self.square_width))
 
     def draw_grabbed_piece(self):
         # Draw grabbed piece
         if self.piece_grabbed != "":
 
             grabbed_piece_cords = self.board_position_to_coordinates(self.pos_grabbed)
-            grabbed_square_color = (255, 255, 255)
+            grabbed_square_color = self.light_square_color
             if (grabbed_piece_cords[0] % 2 == 0 and grabbed_piece_cords[1] % 2 != 0) or (
                     grabbed_piece_cords[0] % 2 != 0 and grabbed_piece_cords[1] % 2 == 0):
-                grabbed_square_color = self.background_color
+                grabbed_square_color = self.dark_square_color
 
             pygame.draw.rect(self.screen, grabbed_square_color,
                              pygame.Rect(
@@ -154,6 +167,7 @@ class ChessLab:
                 (7 - row_num) * 8 + col_num) is not None and col_num < 8 and row_num < 8:
 
             if self.piece_grabbed == "" and pygame.mouse.get_pressed()[0]:
+
                 self.cursor_image = self.grab_cursor
                 self.piece_grabbed = self.board.piece_at((7 - row_num) * 8 + col_num)
                 self.pos_grabbed = self.coordinates_to_board_position(col_num, row_num)
@@ -163,7 +177,11 @@ class ChessLab:
 
         # Handle releasing pieces onto squares
         if self.piece_grabbed != "" and not pygame.mouse.get_pressed()[0] and col_num < 8 and row_num < 8:
-
+            self.light_square_color = [random.randrange(255) for i in range(3)]
+            self.dark_square_color = [random.randrange(255) for i in range(3)]
+            print(self.light_square_color)
+            print(self.dark_square_color)
+            print("\n\n")
             square_released_on = self.coordinates_to_board_position(col_num, row_num)
 
             # Check which side of the column and row the mouse is on, and center the closest_column_x and
@@ -211,6 +229,8 @@ class ChessLab:
                 self.running = False
                 break
 
+
+
             # Generate engine move
             moves = len(self.board.move_stack)
             engine = False
@@ -252,3 +272,4 @@ class ChessLab:
 if __name__ == "__main__":
     lab = ChessLab()
     lab.run_game()
+
