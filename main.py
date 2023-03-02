@@ -4,15 +4,13 @@ import chess
 import chess.engine
 import pygame
 import numpy
-import threading
-import time
-from stockfish import Stockfish
+import random
 
 
 class ChessLab:
     board = chess.Board()
-    engine = chess.engine.SimpleEngine.popen_uci(
-        r"C:\Users\dillo\OneDrive\Desktop\stockfish_15.1_win_x64_avx2\stockfish-windows-2022-x86-64-avx2.exe")
+    row_contents = board.fen().split(" ")[0].split("/")
+    engine = chess.engine.SimpleEngine.popen_uci("stockfish/stockfish-windows-2022-x86-64-avx2.exe")
 
     width, height = 752 * 1.25, 1000 * 1.25
     screen = pygame.display.set_mode((width, height))
@@ -29,30 +27,30 @@ class ChessLab:
 
     cursor_size = square_width / 3
 
-    default_cursor = pygame.transform.scale(pygame.image.load("Mouse-Cursor.svg"),
+    default_cursor = pygame.transform.scale(pygame.image.load("images/mouse_images/Mouse-Cursor.svg"),
                                             (cursor_size, cursor_size))
 
-    hover_cursor = pygame.transform.scale(pygame.image.load("open_hand.svg"),
+    hover_cursor = pygame.transform.scale(pygame.image.load("images/mouse_images/open_hand.svg"),
                                           (cursor_size, cursor_size))
 
-    grab_cursor = pygame.transform.scale(pygame.image.load("grabbed_hand.png"),
+    grab_cursor = pygame.transform.scale(pygame.image.load("images/mouse_images/grabbed_hand.png"),
                                          (cursor_size, cursor_size))
 
     cursor_image = default_cursor
 
-    bB = pygame.image.load("bB.svg")
-    bK = pygame.image.load("bK.svg")
-    bN = pygame.image.load("bN.svg")
-    bP = pygame.image.load("bP.svg")
-    bQ = pygame.image.load("bQ.svg")
-    bR = pygame.image.load("bR.svg")
+    bB = pygame.image.load("images/piece_images/bB.svg")
+    bK = pygame.image.load("images/piece_images/bK.svg")
+    bN = pygame.image.load("images/piece_images/bN.svg")
+    bP = pygame.image.load("images/piece_images/bP.svg")
+    bQ = pygame.image.load("images/piece_images/bQ.svg")
+    bR = pygame.image.load("images/piece_images/bR.svg")
 
-    wB = pygame.image.load("wB.svg")
-    wK = pygame.image.load("wK.svg")
-    wN = pygame.image.load("wN.svg")
-    wP = pygame.image.load("wP.svg")
-    wQ = pygame.image.load("wQ.svg")
-    wR = pygame.image.load("wR.svg")
+    wB = pygame.image.load("images/piece_images/wB.svg")
+    wK = pygame.image.load("images/piece_images/wK.svg")
+    wN = pygame.image.load("images/piece_images/wN.svg")
+    wP = pygame.image.load("images/piece_images/wP.svg")
+    wQ = pygame.image.load("images/piece_images/wQ.svg")
+    wR = pygame.image.load("images/piece_images/wR.svg")
 
     piece_images = {"b": bB, "k": bK, "n": bN, "p": bP, "q": bQ, "r": bR, "B": wB, "K": wK, "N": wN, "P": wP, "Q": wQ,
                     "R": wR}
@@ -63,6 +61,11 @@ class ChessLab:
     # square_width - (solve for scaled_square_width in: scaled_square_width^2 = square_width^2 * piece_scale)
     piece_img_offset = (square_width - square_width * math.sqrt(piece_scale))
 
+    piece_grabbed = ""
+    pos_grabbed = ""
+
+    columns = ["a", "b", "c", "d", "e", "f", "g", "h"]
+
     def __init__(self):
         # Scale the images of the pieces
         for key in self.piece_images.keys():
@@ -70,7 +73,8 @@ class ChessLab:
                                                             (self.square_width * self.piece_scale,
                                                              self.square_width * self.piece_scale))
 
-    columns = ["a", "b", "c", "d", "e", "f", "g", "h"]
+    def board_position_to_coordinates(self, pos):
+        return self.columns.index(pos[0]), int(pos[1])
 
     def coordinates_to_board_position(self, x, y):
         result = ""
@@ -78,11 +82,60 @@ class ChessLab:
         result += str(8 - y)
         return result
 
-    def board_position_to_coordinates(self, pos):
-        return self.columns.index(pos[0]), int(pos[1])
+    def draw_board(self):
+        # Draw board
+        for j in range(8):
+            for i in range(8):
+                offset = self.square_width
+                if j % 2 == 0:
+                    offset = 0
+                if i % 2 == 0:
+                    pygame.draw.rect(self.screen, (255, 255, 255),
+                                     pygame.Rect(
+                                         i * self.square_width + offset,
+                                         j * self.square_width,
+                                         self.square_width, self.square_width))
 
-    piece_grabbed = ""
-    pos_grabbed = ""
+    def draw_grabbed_piece(self):
+        # Draw grabbed piece
+        if self.piece_grabbed != "":
+
+            grabbed_piece_cords = self.board_position_to_coordinates(self.pos_grabbed)
+            grabbed_square_color = (255, 255, 255)
+            if (grabbed_piece_cords[0] % 2 == 0 and grabbed_piece_cords[1] % 2 != 0) or (
+                    grabbed_piece_cords[0] % 2 != 0 and grabbed_piece_cords[1] % 2 == 0):
+                grabbed_square_color = self.background_color
+
+            pygame.draw.rect(self.screen, grabbed_square_color,
+                             pygame.Rect(
+                                 grabbed_piece_cords[0] * self.square_width,
+                                 (8 - grabbed_piece_cords[1]) * self.square_width,
+                                 self.square_width, self.square_width))
+
+            self.screen.blit(self.piece_images[str(self.piece_grabbed)],
+                             (pygame.mouse.get_pos()[0] - self.square_width * self.piece_scale / 4,
+                              pygame.mouse.get_pos()[1] - self.square_width * self.piece_scale / 4))
+
+            self.cursor_image = self.grab_cursor
+
+    def draw_pieces(self):
+        # Draw pieces
+        row_idx = 0
+        col_idx = 0
+        for contents in self.row_contents:
+            row_idx = 0
+            for item in contents:
+                if row_idx >= 8:
+                    break
+
+                if item.isdigit():
+                    row_idx += int(item) - 1
+                else:
+                    self.screen.blit(self.piece_images[item], (
+                        row_idx * self.square_width + self.piece_img_offset,
+                        col_idx * self.square_width + self.piece_img_offset))
+                row_idx += 1
+            col_idx += 1
 
     def handle_mouse(self):
         # Draw mouse and update grabbed pieces
@@ -152,90 +205,38 @@ class ChessLab:
             self.piece_grabbed = ""
 
     def run_game(self):
-        # t1 = threading.Thread(target=self.handle_mouse)
-        # t1.start()
         while self.running:
             if self.board.is_game_over():
                 result = self.board.result()
-                print(result)
                 self.running = False
+                break
 
             # Generate engine move
             moves = len(self.board.move_stack)
-            engine = True
+            engine = False
             if moves % 2 != 0 and engine:
-                # stockfish_moves = self.stockfish.get_top_moves(5)
-                # print(stockfish_moves[0]["Move"])
-                #
-                # stockfish_move = chess.Move(chess.parse_square(stockfish_moves[0]["Move"][0:2]),
-                #            chess.parse_square(stockfish_moves[0]["Move"][2::]))
                 result = self.engine.play(self.board, chess.engine.Limit(time=0.1))
                 self.board.push(result.move)
-                print(str(result.move) + "\n\n")
+
+            if moves % 2 != 0 and not engine:
+                self.board.push(random.choice(list(self.board.legal_moves)))
 
             self.screen.fill(self.background_color)
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
 
             self.handle_mouse()
 
-            # Get FEN string representation of board
-            row_contents = self.board.fen().split(" ")[0].split("/")
+            # Update FEN string representation of board
+            self.row_contents = self.board.fen().split(" ")[0].split("/")
 
-            # Draw board
-            for j in range(8):
-                for i in range(8):
-                    offset = self.square_width
-                    if j % 2 == 0:
-                        offset = 0
-                    if i % 2 == 0:
-                        pygame.draw.rect(self.screen, (255, 255, 255),
-                                         pygame.Rect(
-                                             i * self.square_width + offset,
-                                             j * self.square_width,
-                                             self.square_width, self.square_width))
+            self.draw_board()
 
-            # Draw pieces
-            row_idx = 0
-            col_idx = 0
-            for contents in row_contents:
-                row_idx = 0
-                for item in contents:
-                    if row_idx >= 8:
-                        break
+            self.draw_pieces()
 
-                    if item.isdigit():
-                        row_idx += int(item) - 1
-                    elif self.coordinates_to_board_position(row_idx, col_idx) == self.piece_grabbed:
-                        continue
-                    else:
-                        self.screen.blit(self.piece_images[item], (
-                            row_idx * self.square_width + self.piece_img_offset,
-                            col_idx * self.square_width + self.piece_img_offset))
-                    row_idx += 1
-                col_idx += 1
-
-            # Draw grabbed piece
-            if self.piece_grabbed != "":
-
-                grabbed_piece_cords = self.board_position_to_coordinates(self.pos_grabbed)
-                grabbed_square_color = (255, 255, 255)
-                if (grabbed_piece_cords[0] % 2 == 0 and grabbed_piece_cords[1] % 2 != 0) or (
-                        grabbed_piece_cords[0] % 2 != 0 and grabbed_piece_cords[1] % 2 == 0):
-                    grabbed_square_color = self.background_color
-
-                pygame.draw.rect(self.screen, grabbed_square_color,
-                                 pygame.Rect(
-                                     grabbed_piece_cords[0] * self.square_width,
-                                     (8 - grabbed_piece_cords[1]) * self.square_width,
-                                     self.square_width, self.square_width))
-
-                self.screen.blit(self.piece_images[str(self.piece_grabbed)],
-                                 (pygame.mouse.get_pos()[0] - self.square_width * self.piece_scale / 4,
-                                  pygame.mouse.get_pos()[1] - self.square_width * self.piece_scale / 4))
-
-                self.cursor_image = self.grab_cursor
+            self.draw_grabbed_piece()
 
             # Draw GUI
             pygame.draw.rect(self.screen, (110, 109, 103),
@@ -244,7 +245,7 @@ class ChessLab:
             # Draw mouse and update
             self.screen.blit(self.cursor_image, pygame.mouse.get_pos())
             pygame.display.flip()
-        # t1.join()
+
         self.engine.quit()
 
 
